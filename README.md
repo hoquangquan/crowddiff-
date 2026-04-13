@@ -330,4 +330,3 @@ PYTHONPATH=. .venv/bin/python scripts/super_res_sample.py \
 ---
 
 *Phát triển dựa trên codebase [guided-diffusion](https://github.com/openai/guided-diffusion) của OpenAI.*
-# crowddif-shanghaitech
