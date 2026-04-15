@@ -19,6 +19,7 @@
 6. [Hướng dẫn chạy Pipeline](#6-hướng-dẫn-chạy-pipeline)
    - [6.1 Chạy tự động (1 lệnh)](#61-chạy-tự-động-1-lệnh)
    - [6.2 Chạy từng bước thủ công](#62-chạy-từng-bước-thủ-công)
+   - [6.3 Chạy trên Cloud (Colab & Kaggle)](#63-chạy-trên-cloud-colab--kaggle)
 7. [Phân tích kết quả (Notebooks)](#7-phân-tích-kết-quả--notebooks)
 8. [Kết quả & Đánh giá](#8-kết-quả--đánh-giá)
 9. [Tài liệu tham khảo](#9-tài-liệu-tham-khảo)
@@ -122,7 +123,8 @@ crowddiff-main/
 │
 ├── 📁 scripts/                   # Scripts chính
 │   ├── super_res_train.py        # ▶ Huấn luyện mô hình
-│   └── super_res_sample.py       # ▶ Suy diễn / sinh density map
+│   ├── super_res_sample.py       # ▶ Suy diễn / sinh density map
+│   └── visualize_results.py      # ▶ Trực quan hoá GT, Heatmap & Peaks
 │
 ├── 📁 sh_scripts/                # Shell scripts tiện lợi
 │   ├── preprocess_shtech.sh      # Tiền xử lý ShanghaiTech
@@ -269,6 +271,42 @@ PYTHONPATH=. .venv/bin/python scripts/super_res_sample.py \
 - `results/evaluation/` — ảnh so sánh (grayscale)
 - `results/evaluation/heatmaps/` — heatmap overlay màu JET (3 panel)
 - `results/evaluation/scatter_pred_vs_gt.png` — scatter plot MAE
+
+#### Bước 6 — Trực quan hóa Tùy biến (Custom Visualization)
+
+Bạn có thể dùng công cụ độc lập của đồ án để lưu xuất riêng các hình ảnh Heatmap hoặc tạo các điểm (Green dots) trực tiếp vào ảnh gốc phục vụ cho báo cáo/luận văn:
+
+```bash
+# Vẽ Ảnh Gốc + Heatmap Overlay VÀ Ảnh Gốc + Điểm Dự Đoán Đỏ (Peaks)
+.venv/bin/python scripts/visualize_results.py \
+    --image DuLieuDaXuLy/part_A/part_1/test/1-1.jpg \
+    --den DuLieuDaXuLy/part_A/part_1/test_den/1-1.csv \
+    --out_dir results_vis
+
+# Vẽ Ảnh Gốc + Điểm xanh Ground Truth chuẩn xác (từ file .mat)
+.venv/bin/python scripts/visualize_results.py \
+    --image ~/.cache/kagglehub/datasets/tthien/shanghaitech/versions/1/ShanghaiTech/part_A/test_data/images/IMG_1.jpg \
+    --mat ~/.cache/kagglehub/datasets/tthien/shanghaitech/versions/1/ShanghaiTech/part_A/test_data/ground-truth/GT_IMG_1.mat \
+    --out_dir results_vis
+```
+
+---
+
+### 6.3 Chạy trên Cloud (Colab & Kaggle)
+
+Vì mô hình Diffusion đòi hỏi tính toán lớn, bạn nên đưa dự án này lên các nền tảng đám mây để tận dụng GPU mạnh mẽ và miễn phí. Dự án đã cung cấp sẵn 2 file Notebook rất tiện lợi: `CrowdDiff_Colab.ipynb` và `CrowdDiff_Kaggle.ipynb` ngay trong thư mục gốc.
+
+**Sử dụng với Google Colab:**
+1. Nén toàn bộ mã nguồn của bạn thành file `crowddiff_colab.zip` (Loại trừ các thư mục `.venv`, `DuLieuDaXuLy`, `results`, `.git` để nén cực nhẹ).
+2. Tải file zip lên Google Drive của bạn.
+3. Mở file `CrowdDiff_Colab.ipynb` bằng Colab. Bật loại thời gian chạy là GPU (T4), thiết lập kết nối tới Google Drive và lần lượt thực thi các khối lệnh đã được hướng dẫn để giải nén Code, cài đặt thư viện và tự động Train.
+
+**Sử dụng với Kaggle Notebook (⭐ Rất khuyên dùng):**
+1. Đăng nhập Kaggle và tạo một Dataset mới (ví dụ đặt tên là `crowddiff-source`). Tải file nén `crowddiff_colab.zip` lên Dataset đó (Kaggle sẽ tự động giải nén).
+2. Tạo một Notebook mới trên Kaggle, chọn menu `File -> Import Notebook` và tải lên file `CrowdDiff_Kaggle.ipynb`.
+3. Bấm **Add Data** ở cột bên phải, tìm và gắn thêm Dataset `crowddiff-source` (vừa tạo) và Dataset `tthien/shanghaitech` vào không gian làm việc.
+4. Ở thẻ *Session Options*, bật **Internet** chuyển sang On, chọn Accelerator là **GPU P100** hoặc **GPU T4x2**.
+5. Bấm Play chạy tuần tự các lệnh để sao chép code. Đặc biệt, để train qua đêm mà không bị mất mạng, ở Bước 5 hãy bấm **Save Version -> Save & Run All (Commit)** và tắt máy tính đi ngủ, Kaggle sẽ tự động chạy ngầm trên máy chủ và nén kết quả để bạn tải về vào buổi sáng!
 
 ---
 

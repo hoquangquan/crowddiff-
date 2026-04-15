@@ -39,7 +39,7 @@ LOG_DIR="./results"
 # Tham số huấn luyện (light mode — phù hợp GPU nhỏ)
 IMAGE_SIZE=256
 BATCH_SIZE=1
-SAVE_INTERVAL=5
+SAVE_INTERVAL=1000
 LR=1e-4
 DIFFUSION_STEPS=1000
 NUM_CHANNELS=32

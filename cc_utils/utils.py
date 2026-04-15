@@ -8,6 +8,7 @@ from einops import rearrange
 from PIL import Image
 
 from matplotlib import pyplot as plt
+from skimage.feature import peak_local_max
 
 
 class DataParameter():
@@ -201,24 +202,38 @@ class DataParameter():
         
         if comb_mae > cum_mae:
             pred_count = gt_count + np.sum(self.mae[self.order])
+        density_map = self.combine_crops(self.result)
         
-        self.result = self.combine_crops(self.result).astype(np.uint8)
-        self.result = 255 - self.result
-        self.density = (self.density * 255).clip(0, 255).astype(np.uint8)
-        if self.density.ndim == 3:
-            self.density = self.density[0]
-        self.density = 255 - self.density
+        # 1. Chuẩn bị ảnh gốc
+        h, w = self.image.shape[:2]
+        image_bgr = self.image.astype(np.uint8)[:,:,::-1]
         
-        self.density = np.repeat(self.density[:, :, np.newaxis], 3, -1)
-        self.result = np.repeat(self.result[:,:,np.newaxis], 3, -1)
+        # --- PHASE 1: Vẽ chấm xanh (Green points / Peaks) ---
+        image_peaks = image_bgr.copy()
+        # min_distance 3, threshold 0.01
+        coordinates = peak_local_max(density_map, min_distance=3, threshold_abs=50)
+        for p in coordinates:
+            y, x = int(p[0]), int(p[1])
+            cv2.circle(image_peaks, (x, y), radius=3, color=(0, 255, 0), thickness=-1)
 
-        req_image = np.concatenate([self.density, self.image, self.result], axis=1)
-        # req_image = np.concatenate([sample, gt], axis=1)
-        # req_image = np.repeat(req_image[:,:,np.newaxis], axis=-1, repeats=3)
-        # image = data_parameter.image
-        # req_image = np.concatenate([image, req_image], axis=1)
-        # print(sample.dtype)
-        cv2.imwrite(os.path.join(args.log_dir, f'{self.name} {int(pred_count)} {int(gt_count)}.jpg'), req_image[:,:,::-1])
+        # --- PHASE 2: Vẽ Heatmap ---
+        den_min, den_max = density_map.min(), density_map.max()
+        if den_max > den_min:
+            density_map_normalized = (density_map - den_min) / (den_max - den_min)
+        else:
+            density_map_normalized = density_map
+            
+        density_map_8bit = (density_map_normalized * 255).astype(np.uint8)
+        density_map_8bit = cv2.resize(density_map_8bit, (w, h))
+
+        heatmap_bgr = cv2.applyColorMap(density_map_8bit, cv2.COLORMAP_JET)
+        overlay_bgr = cv2.addWeighted(image_bgr, 0.4, heatmap_bgr, 0.6, 0)
+
+        # 3. Nối hai hình ảnh lại thành 1 để tiện xem cả hai kết quả (Trái: Chấm xanh, Phải: Heatmap)
+        combined_out = np.concatenate([image_peaks, overlay_bgr], axis=1)
+
+        # Lưu ảnh cuối cùng
+        cv2.imwrite(os.path.join(args.log_dir, f'{self.name} {int(pred_count)} {int(gt_count)}.jpg'), combined_out)
 
 
 
