@@ -100,8 +100,9 @@ class LossType(enum.Enum):
 
 class GaussianDiffusion:
     """
-    Tiện ích quy trình (Forward/Reverse ODE) huấn luyện và lấy mẫu cho các mô hình Gaussian Diffusion.
-    Quản lý các phép tính xác suất thêm nhiễu (q_sample) và khử nhiễu (p_sample).
+    Utilities for training and sampling diffusion models.
+
+    Ported directly from here, and then adapted over time to further experimentation.
     https://github.com/hojonathanho/diffusion/blob/1e0dceb3b3495bbe19116a5e1b3596cd0706c543/diffusion_tf/diffusion_utils_2.py#L42
 
     :param betas: a 1-D numpy array of betas for each diffusion timestep,
@@ -269,8 +270,7 @@ class GaussianDiffusion:
         feats = None
         if isinstance(model_output, dict):
             count_output = model_output["count"]
-            if "feats" in model_output:
-                feats = model_output["feats"]
+            feats = model_output["feats"]
             model_output = model_output["out"]
 
         if self.model_var_type in [ModelVarType.LEARNED, ModelVarType.LEARNED_RANGE]:
@@ -512,19 +512,19 @@ class GaussianDiffusion:
             count += 1
             # print(sample['sample'].shape)
             # print(sample.keys())
-            feats = sample["feats"]
+            #feats = sample["feats"]
             # print(feats[-1].shape)
             # print(len(feats))
             # assert False
-            en_feats, de_feats = feats['en'], feats['de']
+            #en_feats, de_feats = feats['en'], feats['de']
             # feats = feats[-3:][2].squeeze().cpu().numpy()
-            if count in [1,25,50,75,100]:
+            #if count in [1,25,50,75,100]:
                 # print(feats.shape)
-                for index in [1,2,3]:
-                    en_feat = en_feats[-index][0].squeeze().cpu().numpy()
-                    de_feat = de_feats[-index][0].squeeze().cpu().numpy()
+                #for index in [1,2,3]:
+                    #en_feat = en_feats[-index][2].squeeze().cpu().numpy()
+                    #de_feat = de_feats[-index][2].squeeze().cpu().numpy()
 
-                    savemat(osp(path, f'{count}_{index}.mat'), {'en_feats': en_feat, 'de_feats': de_feat})
+                    #savemat(osp(path, f'{count}_{index}.mat'), {'en_feats': en_feat, 'de_feats': de_feat})
 
                 # for dim, (en_feat, de_feat) in enumerate(zip(en_feats, de_feats)):
                 #     # plt.subplot(16,12,dim+1)
@@ -537,7 +537,7 @@ class GaussianDiffusion:
                 #     # plt.axis('off')
                 #     # plt.show()
                 #     plt.show()
-        return final, [final["count"].view(-1).cpu().numpy()]
+        #assert False
 
             # print(count) if (count + 1)%10==0 else None
             # if (count + 1)%10==0 and count > 900:
@@ -550,7 +550,7 @@ class GaussianDiffusion:
             # print()
         # return final["sample"]
         # assert False
-        return final, np.stack(iter_count)
+        return final, iter_count
 
 
     def p_sample_loop_progressive(

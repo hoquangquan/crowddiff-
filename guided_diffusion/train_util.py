@@ -3,7 +3,6 @@ import functools
 import os
 import cv2
 import numpy as np
-import subprocess
 
 from einops import rearrange
 
@@ -25,10 +24,6 @@ INITIAL_LOG_LOSS_SCALE = 20.0
 
 
 class TrainLoop:
-    """
-    Vòng lặp huấn luyện chính (Training Loop) quản lý các thiết lập: 
-    Mixed-Precision (FP16), cấu hình tính toán DDP, và cập nhật trọng số Exponential Moving Average (EMA).
-    """
     def __init__(
         self,
         *,
@@ -342,18 +337,6 @@ class TrainLoop:
                 "wb",
             ) as f:
                 th.save(self.opt.state_dict(), f)
-            
-            # --- Tự động nén thư mục kết quả cho Kaggle/Colab ---
-            try:
-                logger.log("Zipping results directory...")
-                # Lệnh nén loại trừ thư mục con kết quả chi tiết của từng step để zip cho nhẹ
-                subprocess.Popen(
-                    f"zip -q -r crowddiff_results.zip {self.log_dir} -x '*/results_*/*'", 
-                    shell=True
-                )
-                logger.log("✅ Auto-zip started in background (crowddiff_results.zip)")
-            except Exception as e:
-                logger.log(f"⚠️ Could not create zip: {e}")
 
         dist.barrier()
 

@@ -2,9 +2,6 @@ import numpy as np
 import cv2
 import os
 import argparse
-"""
-Tiện ích để đếm mật độ đám đông so sánh cơ sở sinh ra giữa ground_truth và predictions.
-"""
 
 from PIL import Image
 
@@ -30,10 +27,6 @@ def get_arg_parser():
 
 
 def main(args):
-    """
-    Tiết xuất giá trị độ đếm điểm tiên đoán (pred_count) và chuẩn hóa (gt_count).
-    Mỗi ảnh được cắt dọc giữa để tách đôi một nửa làm ground-truth và một nửa prediction.
-    """
     path = args.data_dir
 
     img_list = os.listdir(path)

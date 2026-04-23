@@ -8,15 +8,10 @@ from einops import rearrange
 from PIL import Image
 
 from matplotlib import pyplot as plt
-from skimage.feature import peak_local_max
 
 
 class DataParameter():
-    """
-    Lớp đóng gói trạng thái và cấu hình (parameter state) cho mỗi ảnh (batch) 
-    để hỗ trợ thuật toán sliding window nội suy, lưu tạm thời kết quả MAE lấy mẫu
-    và cập nhật liên tục tiến trình đo đạc lượng đám đông qua nhiều vòng lặp (cycles).
-    """
+
     def __init__(self, model_kwargs, args) -> None:
 
         self.name = model_kwargs['name'][0].split('-')[0]
@@ -56,10 +51,6 @@ class DataParameter():
 
 
     def evaluate(self, samples, model_kwargs):
-        """
-        Tiến hành xử lý đánh giá hiệu năng (tính sai phân count)
-        Duy trì nếu MAE của lượt sinh mới nhỏ hơn vòng trước.
-        """
         samples = samples.cpu().numpy()
         
         for index in range(self.order.size):
@@ -116,10 +107,7 @@ class DataParameter():
 
 
     def get_circle_count(self, image, threshold=0, draw=False, name=None):
-        """
-        Kết hợp các filter làm mờ, morphology và contours (trong OpenCV) để
-        phân tách các điểm tập trung mật độ thành từng vòng tròn, qua đó đếm số lượng đám đông.
-        """
+        
         # Denoising
         denoisedImg = cv2.fastNlMeansDenoising(image)
 
@@ -199,41 +187,50 @@ class DataParameter():
 
         comb_mae = np.abs(pred_count-gt_count)
         cum_mae = np.sum(np.abs(self.mae[self.order]))
-        
+
         if comb_mae > cum_mae:
             pred_count = gt_count + np.sum(self.mae[self.order])
-        density_map = self.combine_crops(self.result)
-        
-        # 1. Chuẩn bị ảnh gốc
-        h, w = self.image.shape[:2]
-        image_bgr = self.image.astype(np.uint8)[:,:,::-1]
-        
-        # --- PHASE 1: Vẽ chấm xanh (Green points / Peaks) ---
-        image_peaks = image_bgr.copy()
-        # min_distance 3, threshold 0.01
-        coordinates = peak_local_max(density_map, min_distance=3, threshold_abs=50)
-        for p in coordinates:
-            y, x = int(p[0]), int(p[1])
-            cv2.circle(image_peaks, (x, y), radius=3, color=(0, 255, 0), thickness=-1)
 
-        # --- PHASE 2: Vẽ Heatmap ---
-        den_min, den_max = density_map.min(), density_map.max()
-        if den_max > den_min:
-            density_map_normalized = (density_map - den_min) / (den_max - den_min)
-        else:
-            density_map_normalized = density_map
-            
-        density_map_8bit = (density_map_normalized * 255).astype(np.uint8)
-        density_map_8bit = cv2.resize(density_map_8bit, (w, h))
+        # Combine predicted density map crops into full-resolution image
+        result = self.combine_crops(self.result).astype(np.uint8)
+        result_inv = 255 - result  # invert so blobs are bright on dark bg
 
-        heatmap_bgr = cv2.applyColorMap(density_map_8bit, cv2.COLORMAP_JET)
-        overlay_bgr = cv2.addWeighted(image_bgr, 0.4, heatmap_bgr, 0.6, 0)
+        # --- Build overlay: draw predicted head markers on top of original image ---
+        overlay = self.image.copy()
 
-        # 3. Nối hai hình ảnh lại thành 1 để tiện xem cả hai kết quả (Trái: Chấm xanh, Phải: Heatmap)
-        combined_out = np.concatenate([image_peaks, overlay_bgr], axis=1)
+        # Find contour centers in the predicted density map
+        denoised = cv2.fastNlMeansDenoising(result_inv)
+        _, thresh_img = cv2.threshold(
+            denoised, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU
+        )
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        morph_img = cv2.morphologyEx(thresh_img, cv2.MORPH_OPEN, kernel)
+        contours, _ = cv2.findContours(morph_img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
-        # Lưu ảnh cuối cùng
-        cv2.imwrite(os.path.join(args.log_dir, f'{self.name} {int(pred_count)} {int(gt_count)}.jpg'), combined_out)
+        # Draw a green star marker at each detected head position
+        for contour in contours:
+            pts = contour.squeeze()
+            if pts.ndim < 2:
+                continue
+            x, y = pts.mean(axis=0)
+            # Skip the border contour (centred at the image midpoint)
+            if abs(x - result_inv.shape[1] / 2) < 2 and abs(y - result_inv.shape[0] / 2) < 2:
+                continue
+            cv2.drawMarker(
+                overlay,
+                (int(x), int(y)),
+                color=(0, 255, 0),          # bright green
+                markerType=cv2.MARKER_STAR,
+                markerSize=10,
+                thickness=1,
+            )
+
+        # Save side-by-side: original image | overlay with predicted markers
+        req_image = np.concatenate([self.image, overlay], axis=1)
+        cv2.imwrite(
+            os.path.join(args.log_dir, f'{self.name} {int(pred_count)} {int(gt_count)}.jpg'),
+            req_image[:, :, ::-1]
+        )
 
 
 

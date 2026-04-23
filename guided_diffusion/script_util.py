@@ -96,10 +96,6 @@ def create_model_and_diffusion(
     use_fp16,
     use_new_attention_order,
 ):
-    """
-    Trình khởi tạo kết hợp cho phép gọi thiết lập khởi động kiến trúc mạng UNet
-    cùng với bộ thuật toán mô hình Diffusion (Gaussian).
-    """
     model = create_model(
         image_size,
         num_channels,

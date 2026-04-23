@@ -6,18 +6,7 @@ import os
 
 from PIL import Image
 import blobfile as bf
-# Mocked MPI for single-node usage
-class MockComm:
-    def Get_rank(self): return 0
-    def Get_size(self): return 1
-    def bcast(self, obj, root=0): return obj
-    @property
-    def rank(self): return 0
-    @property
-    def size(self): return 1
-class MockMPI:
-    COMM_WORLD = MockComm()
-MPI = MockMPI()
+from mpi4py import MPI
 import numpy as np
 from torch.utils.data import DataLoader, Dataset
 
@@ -75,11 +64,11 @@ def load_data(
     )
     if deterministic:
         loader = DataLoader(
-            dataset, batch_size=batch_size, shuffle=False, num_workers=1, drop_last=False
+            dataset, batch_size=batch_size, shuffle=False, num_workers=1, drop_last=True
         )
     else:
         loader = DataLoader(
-            dataset, batch_size=batch_size, shuffle=True, num_workers=1, drop_last=False
+            dataset, batch_size=batch_size, shuffle=True, num_workers=1, drop_last=True
         )
     while True:
         yield from loader

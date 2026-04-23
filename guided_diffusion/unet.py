@@ -1,4 +1,3 @@
-
 from abc import abstractmethod
 
 import math
@@ -398,8 +397,7 @@ class QKVAttention(nn.Module):
 
 class UNetModel(nn.Module):
     """
-    Mô hình kiến trúc UNet chi tiết kết hợp cơ chế attention và timestep embedding.
-    Là bộ khung phân giải chính phân tích hình ảnh và sinh đầu ra cho hệ thống Diffusion.
+    The full UNet model with attention and timestep embedding.
 
     :param in_channels: channels in the input Tensor.
     :param model_channels: base channel count for the model.
@@ -485,13 +483,10 @@ class UNetModel(nn.Module):
 
         # count decoder parameters
         
-        self.layer_list = [(num_res_blocks + 1) * k + 1 for k in range(len(channel_mult))]
-        if len(self.layer_list) > 0:
-            self.layer_list[-1] = len(channel_mult) * (num_res_blocks + 1) - 1
-            
+        self.layer_list = [1,4,7,10,13,17]
         self.average_pool = nn.AdaptiveAvgPool2d(1)
-        feat_layers = self.feat_layers = len(channel_mult)
-        linear_nodes = sum([model_channels * mult for mult in channel_mult])
+        feat_layers = self.feat_layers = 6
+        linear_nodes = th.tensor([model_channels*mult for mult in channel_mult[-feat_layers:]]).sum()
         linear_nodes = int(linear_nodes)
         self.count_feat_normalization = nn.LayerNorm(linear_nodes)
         self.linear_nodes = linear_nodes

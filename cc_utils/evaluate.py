@@ -2,16 +2,9 @@ import os
 from PIL import Image
 import argparse
 import numpy as np
-"""
-Công cụ tính độ sai lệch MAE và MSE sử dụng mô hình dự đoán được lưu trữ ở file ảnh hệ thống.
-Kết quả bao gồm: điểm số MAE/MSE toàn cục + hình ảnh heatmap overlay màu JET.
-"""
 import torch as th
 from einops import rearrange
 import cv2
-from matplotlib import pyplot as plt
-from matplotlib.colors import Normalize
-from scipy.ndimage import gaussian_filter
 
 
 def get_arg_parser():
@@ -37,33 +30,22 @@ def config(dir):
 
 
 def main(args):
-    """
-    Quy trình đánh giá (Evaluation) các mẫu:
-    Thiết lập path, khâu/nối các ảnh kết quả crop, bóc tách điểm density và báo cáo giá trị trung bình MAE, MSE toàn cục.
-    """
     data_dir = args.data_dir
     result_dir = args.result_dir
     output_dir = args.output_dir
     image_size = args.image_size
 
     config(output_dir)
-    heatmap_dir = os.path.join(output_dir, 'heatmaps')
-    config(heatmap_dir)
 
-    img_list = sorted(os.listdir(data_dir))
+    img_list = os.listdir(data_dir)
     result_list = os.listdir(result_dir)
 
     mae, mse = 0, 0
-    all_preds, all_gts = [], []
-    per_image_errors = []
 
     for index, name in enumerate(img_list):
         image = Image.open(os.path.join(data_dir, name)).convert('RGB')
 
-        try:
-            crops, gt_count = get_crops(result_dir, name.split('_')[-1], image, result_list)
-        except Exception:
-            continue
+        crops, gt_count = get_crops(result_dir, name.split('_')[-1], image, result_list)
 
         pred = crops[:,:, image_size:-image_size,:].mean(-1)
         gt = crops[:,:, -image_size:,:].mean(-1)
@@ -75,129 +57,26 @@ def main(args):
 
         pred_count = get_circle_count(pred)
 
-        # ── Xuất heatmap màu JET overlay ───────────────────────
-        image_np = np.asarray(image)
-        heatmap_path = os.path.join(heatmap_dir, name.replace('.jpg', '.png'))
-        save_heatmap_overlay(image_np, pred, gt, pred_count, gt_count, heatmap_path)
-
-        # ── Lưu ảnh so sánh đơn giản (grayscale) ──────────────
-        pred_3ch = np.repeat(pred[:,:,np.newaxis],3,-1)
-        gt_3ch   = np.repeat(gt[:,:,np.newaxis],3,-1)
-        image_np_copy = image_np.copy()
+        pred = np.repeat(pred[:,:,np.newaxis],3,-1)
+        gt = np.repeat(gt[:,:,np.newaxis],3,-1)
+        image = np.asarray(image)
 
         gap = 5
-        red_gap = np.zeros((image_np_copy.shape[0],gap,3), dtype=np.uint8)
-        red_gap[:,:,0] = 255
+        red_gap = np.zeros((image.shape[0],gap,3), dtype=int)
+        red_gap[:,:,0] = np.ones((image.shape[0],gap), dtype=int)*255
 
-        compare = np.concatenate([image_np_copy, red_gap, pred_3ch, red_gap, gt_3ch], axis=1)
-        cv2.imwrite(os.path.join(output_dir, name), compare[:,:,::-1])
+        image = np.concatenate([image, red_gap, pred, red_gap, gt], axis=1)
+        # Image.fromarray(image, mode='RGB').show()
+        cv2.imwrite(os.path.join(output_dir,name), image[:,:,::-1])
+        
+        mae += abs(pred_count-gt_count)
+        mse += abs(pred_count-gt_count)**2
 
-        err = abs(pred_count - gt_count)
-        mae += err
-        mse += err ** 2
-        all_preds.append(pred_count)
-        all_gts.append(gt_count)
-        per_image_errors.append({'name': name, 'pred': pred_count, 'gt': int(gt_count), 'abs_err': err})
-        print(f'[{index+1:3d}] {name:30s}  pred={pred_count:5.0f}  gt={gt_count:5.0f}  err={err:.0f}')
+        if index == -1:
+            print(name)
+            break
 
-    n = len(per_image_errors)
-    final_mae = mae / n if n > 0 else 0
-    final_mse = np.sqrt(mse / n) if n > 0 else 0
-    print()
-    print('═' * 55)
-    print(f'  Tổng ảnh đánh giá : {n}')
-    print(f'  MAE (Mean Abs Err): {final_mae:.2f}')
-    print(f'  MSE (Root Mean Sq): {final_mse:.2f}')
-    print('═' * 55)
-    print(f'📁 Heatmap lưu tại : {heatmap_dir}')
-    print()
-
-    # Vẽ scatter plot Predicted vs Ground Truth
-    _save_scatter_plot(all_preds, all_gts, output_dir, final_mae, final_mse)
-
-
-def save_heatmap_overlay(image_np, pred_density, gt_density, pred_count, gt_count, save_path):
-    """
-    Tạo và lưu hình ảnh 3 panel:
-      [Ảnh gốc] | [Heatmap dự đoán (JET overlay)] | [Heatmap Ground Truth (JET overlay)]
-    Mỗi panel có tiêu đề với số lượng người.
-    """
-    def make_heatmap_overlay(base_img, density_map, alpha=0.55):
-        """Overlay density map lên ảnh gốc với colormap JET."""
-        # Làm mượt density map bằng Gaussian filter
-        smooth = gaussian_filter(density_map.astype(np.float32), sigma=4)
-        # Chuẩn hoá về [0, 1]
-        dmax = smooth.max()
-        if dmax > 0:
-            smooth = smooth / dmax
-        # Áp colormap JET
-        colormap = plt.cm.jet(smooth)[:, :, :3]  # (H, W, 3) float64
-        colormap = (colormap * 255).astype(np.uint8)
-        # Alpha blend
-        overlay = (alpha * colormap + (1 - alpha) * base_img).astype(np.uint8)
-        return overlay
-
-    h, w = image_np.shape[:2]
-    gap = np.ones((h, 6, 3), dtype=np.uint8) * 200  # separator màu xám nhạt
-
-    pred_overlay = make_heatmap_overlay(image_np, pred_density)
-    gt_overlay   = make_heatmap_overlay(image_np, gt_density)
-
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-    fig.patch.set_facecolor('#1a1a2e')
-
-    titles = [
-        ('Ảnh Gốc', image_np, None),
-        (f'Dự đoán: {int(pred_count)} người', pred_overlay, 'jet'),
-        (f'Ground Truth: {int(gt_count)} người', gt_overlay, 'jet'),
-    ]
-
-    for ax, (title, img, cmap) in zip(axes, titles):
-        ax.imshow(img)
-        ax.set_title(title, color='white', fontsize=13, fontweight='bold', pad=8)
-        ax.axis('off')
-        # Viền màu cho panel
-        for spine in ax.spines.values():
-            spine.set_edgecolor('#444')
-
-    error = abs(pred_count - gt_count)
-    fig.suptitle(
-        f'Sai số (MAE): {error:.0f} người',
-        color='#f0c040', fontsize=14, fontweight='bold', y=0.02
-    )
-    plt.tight_layout(rect=[0, 0.06, 1, 1])
-    plt.savefig(save_path, dpi=100, bbox_inches='tight',
-                facecolor=fig.get_facecolor())
-    plt.close(fig)
-
-
-def _save_scatter_plot(preds, gts, output_dir, mae, mse):
-    """Vẽ scatter plot: Predicted Count vs Ground Truth Count."""
-    fig, ax = plt.subplots(figsize=(7, 7))
-    fig.patch.set_facecolor('#1a1a2e')
-    ax.set_facecolor('#1a1a2e')
-
-    gts_arr   = np.array(gts)
-    preds_arr = np.array(preds)
-
-    ax.scatter(gts_arr, preds_arr, alpha=0.7, color='#5bc8f5', edgecolors='white', linewidths=0.4, s=60)
-    lim = max(gts_arr.max(), preds_arr.max()) * 1.05
-    ax.plot([0, lim], [0, lim], 'r--', linewidth=1.5, label='Perfect prediction')
-
-    ax.set_xlabel('Ground Truth (số người)', color='white', fontsize=12)
-    ax.set_ylabel('Dự đoán (số người)',      color='white', fontsize=12)
-    ax.set_title(f'Predicted vs Ground Truth\nMAE={mae:.2f}  MSE={mse:.2f}',
-                 color='white', fontsize=13, fontweight='bold')
-    ax.tick_params(colors='white')
-    for spine in ax.spines.values():
-        spine.set_edgecolor('#444')
-    ax.legend(facecolor='#2a2a4e', labelcolor='white')
-
-    scatter_path = os.path.join(output_dir, 'scatter_pred_vs_gt.png')
-    plt.tight_layout()
-    plt.savefig(scatter_path, dpi=100, bbox_inches='tight', facecolor=fig.get_facecolor())
-    plt.close(fig)
-    print(f'📊 Scatter plot lưu tại: {scatter_path}')
+    print(f'mae: {mae/(index+1) :.2f} and mse: {np.sqrt(mse/(index+1)) :.2f}')
 
 
 def remove_background(crops):

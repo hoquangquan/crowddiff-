@@ -1,57 +1,7 @@
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-.Python
-*.egg-info/
-dist/
-build/
-
-# Virtual environment
-.venv/
-venv/
-env/
-
-# Model weights & checkpoints (rất nặng, không push lên git)
-weights/*.pt
-weights/*.pth
-results/*.pt
-results/*.pth
-results/opt*.pt
-results/ema*.pt
-
-# Dữ liệu đã xử lý (rất nặng)
-DuLieuDaXuLy/
-
-# Dữ liệu gốc / cache
-shtech/
-*.cache
-.cache/
-
-# Log files
-results/train_log.txt
-results/sample_log.txt
-results/progress.csv
-results/log.txt
-
-# Jupyter checkpoints
-.ipynb_checkpoints/
-notebooks/.ipynb_checkpoints/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
 .DS_Store
-Thumbs.db
-
-# Kết quả inference (ảnh JPG sinh ra)
-# Bỏ comment dòng dưới nếu không muốn push ảnh kết quả
-# results/*.jpg
-
-# Thư mục experiments tạm
-experiments/
+__pycache__/
+weights/
+venv/
+.venv/
+*.pyc
+.ipynb_checkpoints/

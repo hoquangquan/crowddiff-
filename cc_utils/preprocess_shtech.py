@@ -53,11 +53,7 @@ def get_arg_parser():
 
 
 def main(args):
-    """
-    Quy trình xử lý chính sinh ra tập dữ liệu ShanghaiTech cho huấn luyện.
-    Đọc dữ liệu ảnh và file .mat, sinh ra bản đồ phân bố mật độ đám đông (Density Map) bằng Gaussian filter,
-    và cuối cùng biến đối cắt nhỏ ảnh (crop) bằng kỹ thuật sliding window overlap.
-    """
+
     # dataset directiors
     data_dir = os.path.join(args.data_dir, args.dataset)
     mode = args.mode
@@ -66,7 +62,7 @@ def main(args):
     output_dir = os.path.join(args.output_dir, args.dataset)
 
     try:
-        os.makedirs(output_dir)
+        os.mkdir(output_dir)
     except FileExistsError:
         pass
 
@@ -154,8 +150,8 @@ def main(args):
             den_path = path.replace(os.path.basename(path), os.path.basename(path)+'_den')
 
             try:
-                os.makedirs(path)
-                os.makedirs(den_path)
+                os.mkdir(path)
+                os.mkdir(den_path)
             except FileExistsError:
                 pass
             
@@ -221,9 +217,7 @@ def get_circle_count(image, normalizer=1, threshold=0, draw=False):
 
 
 def create_dot_map(locations, image_size):
-    """
-    Tạo dạng biểu diễn điểm ảnh (dot map) gốc từ các tọa độ 'locations'. Mỗi điểm có người được đánh dấu trên ma trận bằng 1.
-    """
+
     density = np.zeros(image_size[:-1])
     for x,y in locations:
         x, y = int(x), int(y)
@@ -233,9 +227,7 @@ def create_dot_map(locations, image_size):
 
 
 def create_density_kernel(kernel_size, sigma):
-    """
-    Tạo nhân tính toán chập (Convolutional Kernel) Gaussian để làm mờ (blur) bản đồ điểm thành Density Map chuẩn.
-    """
+    
     kernel = np.zeros((kernel_size, kernel_size))
     mid_point = kernel_size//2
     kernel[mid_point, mid_point] = 1
@@ -316,8 +308,10 @@ def create_non_overlapping_crops(image, density, image_size):
 
 def create_overlapping_crops(image, crop_size, overlap):
     """
-    Cắt ảnh đám đông thành các mảnh (crop) có vùng chồng lấn (overlapping window).
-    inputs: ảnh hoặc bản đồ mật độ, kích thước cắt, tỉ lệ chồng lấn.
+    Create overlapping image crops from the crowd image
+    inputs: model_kwargs, arguments
+
+    outputs: model_kwargs and crowd count
     """
     
     X_points = start_points(size=image.shape[1],
@@ -381,7 +375,7 @@ def setup_sub_folders(img_list, output_dir, ndevices=4):
     for device in range(ndevices):
         sub_path = os.path.join(output_dir, f'part_{device+1}')
         try:
-            os.makedirs(sub_path)
+            os.mkdir(sub_path)
         except FileExistsError:
             pass
 

@@ -1,9 +1,6 @@
 """
 Generate a large batch of samples from a super resolution model, given a batch
 of samples from a regular model from image_sample.py.
-Tự động sinh (lấy mẫu) từ mô hình diffusion Siêu phân giải (Super Resolution).
-Script này sẽ chạy qua dữ liệu, áp dụng p_sample_loop từ diffusion để sinh ra
-bản đồ mật độ dự đoán (density maps) và đếm số lượng đám đông.
 """
 
 import argparse
@@ -51,10 +48,6 @@ def set_seed(seed: int = 42) -> None:
 
 
 def main():
-    """
-    Phần thi hành quá trình Inference/Sampling.
-    Đọc pretrained model, nạp dữ liệu và chạy tiến trình lấy mẫu ngược trên U-Net.
-    """
     args = create_argparser().parse_args()
     # th.manual_seed(12013495371642743943)
     # print(th.seed())
@@ -95,7 +88,7 @@ def main():
         model_kwargs = {k: v.to(dist_util.dev()) for k, v in model_kwargs.items()}
         # model_kwargs['low_res'] = model_kwargs['low_res'][:60]
         # print(model_kwargs['low_res'].shape)
-        while data_parameter.resample:
+        for _ in range(1):
             data_parameter.update_cycle()
             samples = diffusion.p_sample_loop(
                 model,
@@ -106,10 +99,10 @@ def main():
             samples, count = samples
             samples = samples["sample"]
             for iter in count:
-                _ = np.stack([data_parameter.crowd_count[data_parameter.crowd_count>=0],iter])
+                _ = np.stack([data_parameter.crowd_count[data_parameter.crowd_count>0],iter])
                 print(_)
+            pass
             data_parameter.evaluate(samples, model_kwargs)
-            data_parameter.save_results(args)
 
             count = np.sum(count,axis=1)
             gt_count = data_parameter.crowd_count.sum()
@@ -123,7 +116,7 @@ def main():
             # count = np.concatenate((np.asarray(gt_count), count))
             # print(gt_count[0])
             print(np.mean(avg_mae, axis=0))
-        # break
+        # pass
     # np.savez(args.log_dir+'/mae_val.npz', avg_mae)
     # np.savetxt(args.log_dir+'/mae_val.txt', avg_mae)
         # data_parameter.save_results(args)
@@ -181,16 +174,13 @@ def main():
         # model_kwargs['name'] = name
         # model_kwargs = combine_crops(result, model_kwargs, dims, mae)
         
-        # save_visuals(model_kwargs, args)
+        data_parameter.save_results(args)
 
     logger.log("sampling complete")
 
 
 def evaluate_samples(samples, model_kwargs, crowd_count, order, result, mae, dims, cycles):
-    """
-    Hàm đánh giá sai số (MAE) của các vùng ảnh/mẫu được cắt ra.
-    Chấp nhận các mẫu có độ chính xác cao hơn và yêu cầu lấy mẫu lại nếu chưa đạt qua ngưỡng sai phân MAE.
-    """
+
     samples = samples.cpu().numpy()
     for index in range(order.size):
         p_result, p_mae = evaluate_sample(samples[index], crowd_count[order[index]], name=f'{index}_{cycles}')
@@ -215,9 +205,6 @@ def evaluate_samples(samples, model_kwargs, crowd_count, order, result, mae, dim
 
 
 def evaluate_sample(sample, count, name=None):
-    """
-    Đánh giá một mẫu đơn bằng cách loại bỏ nền và sử dụng đếm điểm (circle count).
-    """
     
     sample = sample.squeeze()
     sample = (sample+1)
@@ -231,10 +218,6 @@ def evaluate_sample(sample, count, name=None):
 
 
 def remove_background(crop):
-    """
-    Xóa nền trong bức ảnh để giữ lại điểm nổi bật của mật độ. 
-    Lợi dụng thuật toán đếm số lần xuất hiện của màu phổ biến nhất để dự đoán màu nền.
-    """
     def count_colors(image):
 
         colors_count = {}
@@ -259,11 +242,6 @@ def remove_background(crop):
 
 
 def get_circle_count(image, threshold=0, draw=False, name=None):
-    """
-    Sử dụng kỹ thuật xử lý ảnh cổ điển (OpenCV) với Morphology, Denoise và Thresholding 
-    để trích xuất các contours (viền) và đếm các vị trí tập trung mật độ.
-    Từ đó tính ngầm số lượng đám đông tại các điểm đó.
-    """
 
     # Denoising
     denoisedImg = cv2.fastNlMeansDenoising(image)
@@ -297,10 +275,6 @@ def get_circle_count(image, threshold=0, draw=False, name=None):
 
 
 def create_crops(model_kwargs, args):
-    """
-    Tạo các bản cắt (crops) từ ảnh gốc để đưa vào model nếu ảnh vượt quá kích thước chịu đựng của bộ nhớ.
-    Đệm thêm viền (padding) bằng hàm create_padded_image.
-    """
     
     image = model_kwargs['low_res']
     density = model_kwargs['high_res']
@@ -323,7 +297,7 @@ def create_crops(model_kwargs, args):
 
 
 def organize_crops(model_kwargs):
-    indices = np.where(model_kwargs['crowd_count']>=0)
+    indices = np.where(model_kwargs['crowd_count']>0)
     model_kwargs['order'] = model_kwargs['order'][indices]
     model_kwargs['low_res'] = model_kwargs['low_res'][indices]
 
@@ -346,9 +320,6 @@ def create_padded_image(image, image_size):
 
 
 def combine_crops(crops, model_kwargs, dims, mae, image_size=256):
-    """
-    Tái tạo/Khâu (stitch) các ảnh nhỏ (crops) ghép lại thành ảnh có kích thước lớn nguyên bản ban đầu.
-    """
 
     crops = th.tensor(crops).squeeze()
     p1, p2 = (dims[0]-1+image_size)//image_size, (dims[1]-1+image_size)//image_size
@@ -395,9 +366,6 @@ def save_visuals(model_kwargs, args):
 
 
 def create_argparser():
-    """
-    Bộ cấu hình cho chức năng lấy mẫu qua mô hình diffusion.
-    """
     defaults = dict(
         clip_denoised=True,
         num_samples=10000,
@@ -420,10 +388,6 @@ def create_argparser():
 
 
 def load_data_for_worker(base_samples, batch_size, normalizer, pred_channels, file_name, class_cond=False):
-    """
-    Chuẩn bị luồng dữ liệu (generator) qua quá trình Testing từ thư mục được chỉ định.
-    Gửi tuần tự từng batch dữ liệu cho U-Net qua từ khóa 'low_res' và 'high_res'.
-    """
     if file_name == '':
         img_list = sorted(glob.glob(os.path.join(base_samples,'*.jpg')))
     else:

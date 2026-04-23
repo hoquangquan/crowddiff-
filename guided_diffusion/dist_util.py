@@ -7,17 +7,7 @@ import os
 import socket
 
 import blobfile as bf
-# Mocked MPI for single-node usage
-class MockComm:
-    def Get_rank(self): return 0
-    def bcast(self, obj, root=0): return obj
-    @property
-    def rank(self): return 0
-    @property
-    def size(self): return 1
-class MockMPI:
-    COMM_WORLD = MockComm()
-MPI = MockMPI()
+from mpi4py import MPI
 import torch as th
 import torch.distributed as dist
 
@@ -34,7 +24,7 @@ def setup_dist():
     """
     if dist.is_initialized():
         return
-    os.environ["CUDA_VISIBLE_DEVICES"] = f"{MPI.COMM_WORLD.Get_rank() % GPUS_PER_NODE}"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = f"{MPI.COMM_WORLD.Get_rank() % GPUS_PER_NODE}"
 
     comm = MPI.COMM_WORLD
     backend = "gloo" if not th.cuda.is_available() else "nccl"
@@ -49,7 +39,7 @@ def setup_dist():
 
     port = comm.bcast(_find_free_port(), root=0)
     os.environ["MASTER_PORT"] = str(port)
-    dist.init_process_group(backend=backend, init_method="env://", rank=0, world_size=1)
+    dist.init_process_group(backend=backend, init_method="env://")
 
 
 def dev():
@@ -65,8 +55,22 @@ def load_state_dict(path, **kwargs):
     """
     Load a PyTorch file without redundant fetches across MPI ranks.
     """
-    with bf.BlobFile(path, "rb") as f:
-        data = f.read()
+    chunk_size = 2 ** 30  # MPI has a relatively small size limit
+    if MPI.COMM_WORLD.Get_rank() == 0:
+        with bf.BlobFile(path, "rb") as f:
+            data = f.read()
+        num_chunks = len(data) // chunk_size
+        if len(data) % chunk_size:
+            num_chunks += 1
+        MPI.COMM_WORLD.bcast(num_chunks)
+        for i in range(0, len(data), chunk_size):
+            MPI.COMM_WORLD.bcast(data[i : i + chunk_size])
+    else:
+        num_chunks = MPI.COMM_WORLD.bcast(None)
+        data = bytes()
+        for _ in range(num_chunks):
+            data += MPI.COMM_WORLD.bcast(None)
+
     return th.load(io.BytesIO(data), **kwargs)
 
 
